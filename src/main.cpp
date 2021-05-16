@@ -13,7 +13,7 @@ Adafruit_PN532 nfc(PN532_SCK, PN532_MISO, PN532_MOSI, PN532_SS);
 
 
 
-char * url = "AT URD GUENANE LAHCENE 0670001876";
+char * url = "{\"GPS\":\"36.7249122:3.1542043\",\"CONSTITUTION\":\"boom\",\"ND1\":\"035853195\",\"ND2\":\"0\",\"ND3\":\"0\",\"ND4\":\"0\",\"ND5\":\"0\",\"ND6\":\"0\",\"ND7\":\"0\"}";
 uint8_t ndefprefix = NDEF_URIPREFIX_NONE;
 
 void setup(void) {
