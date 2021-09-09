@@ -4,10 +4,11 @@
 #include <SPI.h>
 #include <Adafruit_PN532.h>
 #include <SoftwareSerial.h>
-SoftwareSerial BT(8,7); // For Bleutooth
-//Tx == 8; Rx == 7
+#include <ArduinoJson.h>
 
-// If using the breakout with SPI, define the pins for SPI communication.
+SoftwareSerial BT(8,7); // Using Bleutooth Tx == 8; Rx == 7
+
+// Define the pins for SPI communication.
 #define PN532_SCK  (2)
 #define PN532_MOSI (3)
 #define PN532_SS   (4)
@@ -19,23 +20,25 @@ uint8_t ndefprefix = NDEF_URIPREFIX_NONE;
 
 const int buttonPin = 9; // Botton
 
+DynamicJsonDocument doc(1024);
 
 void setup(void) 
 {
-  
-  pinMode(buttonPin, INPUT);
-  
   Serial.begin(115200);
   BT.begin(115200); // For Bleutooth
   while (!Serial) delay(10); 
 
   nfc.begin();
 
+  pinMode(buttonPin, INPUT); // Declare the botton 
+                                                           
   uint32_t versiondata = nfc.getFirmwareVersion();
-  if (! versiondata) {
+  if (! versiondata) 
+  {
     Serial.print("Didn't find PN53x board");
-    BT.write("Didn't find NFC Module");
-    while (1); // halt
+    BT.write("Didn't find NFC Mudole");
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
+    while (1);
   }
   
   Serial.print("Found chip PN5"); Serial.println((versiondata>>24) & 0xFF, HEX); 
@@ -47,33 +50,42 @@ void setup(void)
   nfc.SAMConfig();   
 }
 
+
 void loop(void) 
 {
   
   int buttonState = digitalRead(buttonPin);
   
-  if (buttonState == HIGH) 
-  {
   uint8_t success;
-  uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
-  uint8_t uidLength;                        // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
+  uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  
+  uint8_t uidLength;                        
   uint8_t dataLength;
 
-  // Require some user feedback before running this example!
   Serial.println("\r\nPlace your NDEF formatted NTAG2xx tag on the reader to update the");
   Serial.println("NDEF record and press any key to continue ...\r\n");
-  // Wait for user input before proceeding
-  
-  while (Serial.available()) Serial.read();
-
-  // 1.) Wait for an NTAG203 card.  When one is found 'uid' will be populated with
-  // the UID, and uidLength will indicate the size of the UID (normally 7)
-  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
-  
-  // It seems we found a valid ISO14443A Tag!
-  if (success) 
+ 
+  while (BT.available())
   {
-    // 2.) Display some basic information about the card
+    char messagechar = BT.read();
+    String message;
+    if(messagechar != '/n')
+    {
+       message += String(messagechar);
+    } 
+    else
+     {
+      deserializeJson(doc, message);
+      JsonObject obj = doc.as<JsonObject>();
+      String mode = obj["mode"].as<String>();  
+    
+    if(mode == "write")
+    {
+      if (buttonState == HIGH) 
+      {
+        success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
+        if (success) 
+        {
+    BT.write("Found NFC Tag");
     Serial.println("Found an ISO14443A card");
     Serial.print("  UID Length: ");Serial.print(uidLength, DEC);Serial.println(" bytes");
     Serial.print("  UID Value: ");
@@ -106,13 +118,12 @@ void loop(void)
         }
         else
         {
-          // 4.) Determine and display the data area size
+          
           dataLength = data[2]*8;
           Serial.print("Tag is NDEF formatted. Data area size = ");
           Serial.print(dataLength);
           Serial.println(" bytes");
           
-          // 5.) Erase the old data area
           Serial.print("Erasing previous data area ");
           for (uint8_t i = 4; i < (dataLength/4)+4; i++) 
           {
@@ -122,14 +133,15 @@ void loop(void)
             if (!success)
             {                                            
               Serial.println(" ERROR!");
+              BT.write("ERROR!");
            
               return;
             }
+
           }
           Serial.println(" DONE!");
-          
-          
-          // 6.) Try to add a new NDEF URI record
+          BT.write("DONE");
+        
           Serial.print("Writing URI as NDEF Record ... ");
           success = nfc.ntag2xx_WriteNDEFURI(ndefprefix, url, dataLength);
           if (success)
@@ -140,37 +152,33 @@ void loop(void)
           else
           {
             Serial.println("ERROR! (URI length?)");
-            BT.write("ERROR");
+            BT.write("ERROR!");
           }
                     
-        } // CC contents NDEF record check
-      } // CC page read check
-    } // UUID length check
+        } 
+      } 
+    } 
     
-    // Wait a bit before trying again
     Serial.flush();
     while (!Serial.available());
-    while (Serial.available()) {
+    while (Serial.available()) 
+    {
     Serial.read();
     }
     Serial.flush();    
-  }
-  }
+     }
+   } 
+} 
 
-  // Read NFC _____________________________________________________________________________________________________________
-  
-  if (buttonState == LOW)
-  {
-    uint8_t success;
-  uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
-  uint8_t uidLength;                        // Length of the UID (4 or 7 bytes depending on ISO14443A card type)
+else if(mode=="read")
+{
+      if (buttonState == HIGH) 
+ {
+    success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
+
+    if (success) 
+    {
     
-  // Wait for an NTAG203 card.  When one is found 'uid' will be populated with
-  // the UID, and uidLength will indicate the size of the UUID (normally 7)
-  success = nfc.readPassiveTargetID(PN532_MIFARE_ISO14443A, uid, &uidLength);
-  
-  if (success) {
-    // Display some basic information about the card
     Serial.println("Found an ISO14443A card");
     Serial.print("  UID Length: ");Serial.print(uidLength, DEC);Serial.println(" bytes");
     Serial.print("  UID Value: ");
@@ -182,27 +190,12 @@ void loop(void)
     {
       uint8_t data[32];
       
-      // We probably have an NTAG2xx card (though it could be Ultralight as well)
       Serial.println("Seems to be an NTAG2xx tag (7 byte UID)");    
-      
-      // NTAG2x3 cards have 39*4 bytes of user pages (156 user bytes),
-      // starting at page 4 ... larger cards just add pages to the end of
-      // this range:
-      
-      // See: http://www.nxp.com/documents/short_data_sheet/NTAG203_SDS.pdf
-
-      // TAG Type       PAGES   USER START    USER STOP
-      // --------       -----   ----------    ---------
-      // NTAG 203       42      4             39
-      // NTAG 213       45      4             39
-      // NTAG 215       135     4             129
-      // NTAG 216       231     4             225      
-
+          
       for (uint8_t i = 0; i < 42; i++) 
       {
         success = nfc.ntag2xx_ReadPage(i, data);
         
-        // Display the current page number
         Serial.print("PAGE ");
         if (i < 10)
         {
@@ -215,10 +208,9 @@ void loop(void)
         }
         Serial.print(": ");
 
-        // Display the results, depending on 'success'
         if (success) 
         {
-          // Dump the page data
+          
           nfc.PrintHexChar(data, 4);
         }
         else
@@ -234,7 +226,6 @@ void loop(void)
       BT.write("Can't read");
     }
     
-    // Wait a bit before trying again
     Serial.println("\n\nSend a character to scan another tag!");
     Serial.flush();
     while (!Serial.available());
@@ -243,6 +234,13 @@ void loop(void)
     }
     Serial.flush();    
   }
+}
+} 
+
+else {
+      BT.write("BAD REQUEST");
+    }
+        Serial.print("BAD REQUEST");
+     }
   }
-  
 }
